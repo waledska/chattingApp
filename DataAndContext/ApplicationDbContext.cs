@@ -28,6 +28,9 @@ namespace chattingApp.DataAndContext
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // the old constructor that define the authentication Models and theire relations
+            base.OnModelCreating(modelBuilder);
+
             modelBuilder.Entity<Group>(entity =>
             {
                 entity.ToTable("group");

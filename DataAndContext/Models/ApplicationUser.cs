@@ -7,5 +7,6 @@ namespace chattingApp.DataAndContext.Models
         // modify in the properties here saksoook!
         public bool phoneNumIsVerified { get; set; }
         public DateTime lastOnlineTime { get; set; }
+        public string imgURL { get; set; }
     }
 }
