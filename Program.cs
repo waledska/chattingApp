@@ -1,6 +1,7 @@
 using chattingApp.DataAndContext;
 using chattingApp.DataAndContext.Models;
 using chattingApp.Helpers;
+using chattingApp.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -22,6 +23,9 @@ namespace chattingApp
             // configuration to map the data from appsetings to class JWT
             builder.Services.Configure<JWT>(builder.Configuration.GetSection("JWT"));
 
+            // configure to map data from appsettings to class Twilio
+            builder.Services.Configure<TwilioSettings>(builder.Configuration.GetSection("Twilio"));
+
             // assign the connection string variable with it's data
             var connectionString = builder.Configuration.GetConnectionString("defaultConnection");
             // use this connection string to map between my class db context and my db in the sql server
@@ -30,6 +34,11 @@ namespace chattingApp
             // configure our identity(tells our system that which context is for the identity)
             builder.Services.AddIdentity<ApplicationUser, IdentityRole>().AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
+
+            // configure services 
+            builder.Services.AddScoped<IAuthService, AuthService>();
+            builder.Services.AddScoped<ITransferPhotosToPathWithStoreService, TransferPhotosToPathWithStoreService>();
+            builder.Services.AddTransient<ISMSService, SMSService>();
 
             // configure JWT
             builder.Services.AddAuthentication(options => {
@@ -60,6 +69,7 @@ namespace chattingApp
             });
 
             builder.Services.AddControllers();
+            builder.Services.AddMemoryCache();
 
             // Add HttpContextAccessor service this is for make func getUserId...
             // AddHttpContextAccessor => and this to could us get the token from the header of the API

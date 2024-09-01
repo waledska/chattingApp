@@ -1,3 +1,4 @@
+using chattingApp.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace chattingApp.Controllers
@@ -6,6 +7,11 @@ namespace chattingApp.Controllers
     [Route("[controller]")]
     public class WeatherForecastController : ControllerBase
     {
+        private readonly IAuthService _authService;
+        public WeatherForecastController(IAuthService authService)
+        {
+            _authService = authService;
+        }
         private static readonly string[] Summaries = new[]
         {
         "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
