@@ -1,6 +1,7 @@
 using chattingApp.DataAndContext;
 using chattingApp.DataAndContext.Models;
 using chattingApp.Helpers;
+using chattingApp.middlewares;
 using chattingApp.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -37,6 +38,7 @@ namespace chattingApp
 
             // configure services 
             builder.Services.AddScoped<IAuthService, AuthService>();
+            //builder.Services.AddScoped<JwtMiddleware>(); // Register the middleware service
             builder.Services.AddScoped<ITransferPhotosToPathWithStoreService, TransferPhotosToPathWithStoreService>();
             builder.Services.AddTransient<ISMSService, SMSService>();
 
@@ -64,7 +66,7 @@ namespace chattingApp
             // to determine the time of lifespan of the OTP which we use for reset password or 2 factor authentication for ex
             builder.Services.Configure<DataProtectionTokenProviderOptions>(op =>
             {
-                // Token valid for 1 hours
+                // otp valid for 1 hours
                 op.TokenLifespan = TimeSpan.FromHours(1);
             });
 
@@ -115,14 +117,17 @@ namespace chattingApp
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
             {
+                app.UseDeveloperExceptionPage();
                 app.UseSwagger();
                 app.UseSwaggerUI();
             }
 
             app.UseHttpsRedirection();
+            app.UseRouting();
 
             app.UseAuthentication();
             app.UseAuthorization();
+            app.UseMiddleware<JwtMiddleware>();
 
 
             app.MapControllers();

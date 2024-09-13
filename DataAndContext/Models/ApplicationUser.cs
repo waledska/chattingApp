@@ -8,5 +8,6 @@ namespace chattingApp.DataAndContext.Models
         public bool phoneNumIsVerified { get; set; }
         public DateTime lastOnlineTime { get; set; }
         public string imgURL { get; set; }
+
     }
 }

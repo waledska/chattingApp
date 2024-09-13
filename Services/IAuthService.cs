@@ -10,9 +10,13 @@ namespace chattingApp.Services
         Task<registerResult> registerAsync(userDataModel model);
         // log in
         Task<string> sendOTPToLoginAsync(sendOTPForLoginModel model);
-        Task<registerResult> getTRokenAsync(loginModel model);
+        Task<registerResult> getTokenAsync(loginModel model);
         // log out
-        Task<string> logOutAsync();
+        Task<string> LogOutAsync();
+
+        // Token blacklisting methods
+        void BlacklistToken(string token);
+        bool IsTokenBlacklisted(string token);
 
     }
 }

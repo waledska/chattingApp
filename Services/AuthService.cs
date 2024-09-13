@@ -12,6 +12,8 @@ using Twilio.Http;
 using Microsoft.Extensions.Caching.Memory;
 using Twilio.Types;
 using Microsoft.EntityFrameworkCore;
+using chattingApp.DataAndContext;
+using chattingApp.DataAndContext.ModelsForChattingApp;
 
 namespace chattingApp.Services
 {
@@ -23,13 +25,17 @@ namespace chattingApp.Services
         private readonly IMemoryCache _memoryCache;
         private readonly ISMSService _smsService;
         private readonly ITransferPhotosToPathWithStoreService _transferPhotosToPath;
+        private readonly ApplicationDbContext _DbContext;
+        private static readonly HashSet<string> _blacklistedTokens = new HashSet<string>();
+
         public AuthService(
             UserManager<ApplicationUser> userManager,
             IOptions<JWT> jwtOptions,
             IHttpContextAccessor httpContextAccessor,
             IMemoryCache memoryCache,
             ISMSService smsService,
-            ITransferPhotosToPathWithStoreService transferPhotosToPath
+            ITransferPhotosToPathWithStoreService transferPhotosToPath,
+            ApplicationDbContext applicationDbContext
             )
         {
             _userManager = userManager;
@@ -38,6 +44,7 @@ namespace chattingApp.Services
             _memoryCache = memoryCache;
             _smsService = smsService;
             _transferPhotosToPath = transferPhotosToPath;
+            _DbContext = applicationDbContext;
         }
 
         // 2 function to get user Id GetUserIdFromToken(helper), getUserId(main)
@@ -90,7 +97,7 @@ namespace chattingApp.Services
             if (user != null)
                 return "error, this phone number is already assigned to another user!";
 
-            return sendOtpToUserAsync(model.phoneNumber);
+            return await sendOtpToUserAsync(model.phoneNumber);
         }
         public async Task<registerResult> registerAsync(userDataModel model)
         {
@@ -104,8 +111,9 @@ namespace chattingApp.Services
             if (user != null)
                 return new registerResult{ Message = "error, this phone number is already registered for another user!" };
 
-            if (!IsValidOtpForUser(new VerificationOtp { OTP = model.OTPforPhoneConfirmaiton, phoneNumber = model.phoneNumber }))
+            if (!await IsValidOtpForUserAsync(new VerificationOtp { OTP = model.OTPforPhoneConfirmaiton, phoneNumber = model.phoneNumber }))
                 return new registerResult { Message = "error, OTP is not correct" };
+
 
             var storingImgResult = _transferPhotosToPath.GetPhotoPath(model.img);
 
@@ -118,10 +126,12 @@ namespace chattingApp.Services
                 lastOnlineTime = DateTime.Now,
                 PhoneNumber = model.phoneNumber,
                 PhoneNumberConfirmed = true,
-                UserName = model.name
-
+                UserName = model.name,
+                Email = ""
             };
 
+
+            // storing the new user 
             var result = await _userManager.CreateAsync(newUser);
             if (!result.Succeeded)
             {
@@ -133,7 +143,13 @@ namespace chattingApp.Services
                 return new registerResult { Message = errors };
             }
 
-            var jwtSecurityToken = await CreateJwtTokenAsync(newUser);
+            
+            // select the user with his full data
+            var newUserFullData = await _userManager.Users.FirstOrDefaultAsync(p => p.PhoneNumber == model.phoneNumber);
+
+
+            // creating JWT Token
+            var jwtSecurityToken = await CreateJwtTokenAsync(newUserFullData);
 
             registerResult resultModel = new registerResult
             {
@@ -145,22 +161,61 @@ namespace chattingApp.Services
                 ExpiresOn = jwtSecurityToken.ValidTo
             };
 
+            
+
             return resultModel;
         }
         // login
         public async Task<string> sendOTPToLoginAsync(sendOTPForLoginModel model)
         {
-            throw new NotImplementedException();
+            // check if this user data for real user in the db
+
+            var user = await _userManager.Users.FirstOrDefaultAsync(x => x.UserName == model.userName);
+            if (user == null)
+                return "error, your data is not correct!";
+            if (user.PhoneNumber != model.phoneNumber)
+                return "error, your data is not correct!";
+
+            return await sendOtpToUserAsync(model.phoneNumber);
         }
-        public async Task<registerResult> getTRokenAsync(loginModel model)
+        public async Task<registerResult> getTokenAsync(loginModel model)
         {
-            throw new NotImplementedException();
+            
+            // checking the user data user name and otp(password)
+            var user = await _userManager.FindByNameAsync(model.UserName);
+            if (user == null)
+                return new registerResult { Message = "error, your data is not correct!" };
+
+            var phoneOtp = await _DbContext.PhoneOtps.FirstOrDefaultAsync(x => x.PhoneNumber == user.PhoneNumber);
+            if (phoneOtp == null)
+                return new registerResult { Message = "error,  your data is not correct!" };
+            if(user == null)
+                return new registerResult { Message = "error,  your data is not correct!" };
+            if (!await IsValidOtpForUserAsync(new VerificationOtp { OTP = model.Otp, phoneNumber = user.PhoneNumber}))
+                return new registerResult { Message = "error,  your data is not correct" };
+
+            // generating the token for this user by jwt
+            var jwtToken = await CreateJwtTokenAsync(user);
+
+            // creating the result object 
+            var result = new registerResult
+            {
+                name = user.UserName,
+                phoneNumber = user.PhoneNumber,
+                imgUrl = user.imgURL,
+                token = new JwtSecurityTokenHandler().WriteToken(jwtToken),
+                ExpiresOn = jwtToken.ValidTo,
+                Message = ""
+            };
+            return result;
         }
 
         // logout
-        public Task<string> logOutAsync()
+        public async Task<string> LogOutAsync()
         {
-            throw new NotImplementedException();
+            var token = _httpContextAccessor.HttpContext.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+            BlacklistToken(token);
+            return "Logged out successfully";
         }
         // more helping functions
 
@@ -196,6 +251,22 @@ namespace chattingApp.Services
 
             return jwtSecurityToken;
         }
+        // helping for logout by put generated token in black list
+        public void BlacklistToken(string token)
+        {
+            lock (_blacklistedTokens)
+            {
+                _blacklistedTokens.Add(token);
+            }
+        }
+
+        public bool IsTokenBlacklisted(string token)
+        {
+            lock (_blacklistedTokens)
+            {
+                return _blacklistedTokens.Contains(token);
+            }
+        }
 
         private string generateOtp()
         {
@@ -203,7 +274,7 @@ namespace chattingApp.Services
             return random.Next(100000, 999999).ToString();
         }
 
-        private string sendOtpToUserAsync(string userPhone)
+        private async Task<string> sendOtpToUserAsync(string userPhone)
         {
             if (userPhone is null || userPhone == "")
                 return "error, phone number for user can't be empty!";
@@ -211,31 +282,53 @@ namespace chattingApp.Services
             if (otp is null || otp == "")
                 return "error, some thing went wrong please try again!";
 
+            // your logic for storing otps in sql in table phoneOtps
+            var newPhoneOtp = new phoneOtp
+            {
+                otp = otp,
+                PhoneNumber = userPhone,
+                validTo = DateTime.Now.AddMinutes(5),
+            };
 
-            var cacheEntryOptions = new MemoryCacheEntryOptions()
-                .SetSlidingExpiration(TimeSpan.FromMinutes(5)); // OTP expires in 5 minutes
+            var oldOtp = await _DbContext.PhoneOtps.FirstOrDefaultAsync(x => x.PhoneNumber == userPhone);
+            if (oldOtp == null)
+            {
+                // Asynchronously add new OTP entry if no existing one is found
+                await _DbContext.PhoneOtps.AddAsync(newPhoneOtp);
+            }
+            else
+            {
+                // Update only the necessary fields
+                oldOtp.otp = newPhoneOtp.otp;
+                oldOtp.validTo = newPhoneOtp.validTo;
+            }
 
-            // store the OTP in the cash memory
-            _memoryCache.Set(userPhone, otp, cacheEntryOptions);
+            // Asynchronously save changes to the database
+            await _DbContext.SaveChangesAsync();
 
             // send OTP to user in sms message
-            var responseFromTwilio = _smsService.Send(userPhone, $"Your OTP for chatting app is: {otp}");
-            if(!string.IsNullOrEmpty(responseFromTwilio.ErrorMessage))
-                return "error, from sending twilio.... " + responseFromTwilio.ErrorMessage;
+            //var responseFromTwilio = _smsService.Send( "+2" + userPhone, $"Your OTP for chatting app is: {otp}");
+            //if(!string.IsNullOrEmpty(responseFromTwilio.ErrorMessage))
+            //    return "error, from sending twilio.... " + responseFromTwilio.ErrorMessage;
 
-            return "";
+            //return "";
+            return otp; /////////////////// this modification only and above!!!
         }
         
-        private bool IsValidOtpForUser(VerificationOtp request)
+        private async Task<bool> IsValidOtpForUserAsync(VerificationOtp request)
         {
+            var otpForThisPhone = await _DbContext.PhoneOtps.FirstOrDefaultAsync(x => x.PhoneNumber == request.phoneNumber);
 
-            if (_memoryCache.TryGetValue(request.phoneNumber, out string cachedOtp) && cachedOtp == request.OTP)
+            if ( (otpForThisPhone is not null) && (otpForThisPhone.validTo > DateTime.Now) && (otpForThisPhone.otp == request.OTP))
             {
-                // otp is right for this phone number
-                _memoryCache.Remove(request.phoneNumber); // Remove OTP from cache after successful verification
+                otpForThisPhone.validTo = DateTime.Now;
+                await _DbContext.SaveChangesAsync();
+
                 return true;
             }
+
             return false;
         }
+
     }
 }

@@ -17,6 +17,8 @@ namespace chattingApp.DataAndContext
         public virtual DbSet<Group> Groups { get; set; } = null!;
         public virtual DbSet<GroupMember> GroupMembers { get; set; } = null!;
         public virtual DbSet<Message> Messages { get; set; } = null!;
+        public virtual DbSet<phoneOtp> PhoneOtps { get; set; } = null!;
+
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -106,6 +108,28 @@ namespace chattingApp.DataAndContext
                 entity.Property(e => e.TimeOfSend)
                     .HasColumnType("datetime")
                     .HasColumnName("timeOfSend");
+            });
+
+            modelBuilder.Entity<phoneOtp>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id)
+                    .HasColumnName("id")
+                    .ValueGeneratedOnAdd(); // This ensures the ID is auto-incremented
+
+                entity.Property(e => e.validTo)
+                    .HasColumnType("datetime")
+                    .HasColumnName("validTo");
+
+                entity.Property(e => e.PhoneNumber)
+                    .IsRequired() // Ensuring the PhoneNumber is required
+                    .HasMaxLength(50)
+                    .HasColumnName("phoneNumber");
+
+                entity.Property(e => e.otp)
+                    .IsRequired() // Ensuring the OTP is required
+                    .HasMaxLength(50)
+                    .HasColumnName("otp");
             });
 
             OnModelCreatingPartial(modelBuilder);

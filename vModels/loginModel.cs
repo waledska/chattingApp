@@ -5,7 +5,7 @@ namespace chattingApp.vModels
     public class loginModel
     {
         [Required]
-        public string Token { get; set; }
+        public string Otp { get; set; }
         [Required]
         public string UserName { get; set; }
     }
