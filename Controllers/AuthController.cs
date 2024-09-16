@@ -20,7 +20,7 @@ namespace chattingApp.Controllers
         // get userId
         [Authorize(AuthenticationSchemes = "Bearer")]
         [HttpGet("getUserIdFromToken")]
-        public async Task<IActionResult> getUserId()
+        public IActionResult getUserId()
         {
             return Ok(_authService.getUserId());
         }

@@ -14,6 +14,7 @@ namespace chattingApp.DataAndContext.ModelsForChattingApp
         public string GroupName { get; set; } = null!;
         public string CreatedById { get; set; } = null!;
         public DateTime CreatedAt { get; set; }
+        public string imgUrl { get; set; }
 
         public virtual ICollection<GroupMember> GroupMembers { get; set; }
     }

@@ -36,10 +36,11 @@ namespace chattingApp
             builder.Services.AddIdentity<ApplicationUser, IdentityRole>().AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
 
-            // configure services 
+            // configure services by scoped
             builder.Services.AddScoped<IAuthService, AuthService>();
-            //builder.Services.AddScoped<JwtMiddleware>(); // Register the middleware service
+            builder.Services.AddScoped<IUserService, UserService>();
             builder.Services.AddScoped<ITransferPhotosToPathWithStoreService, TransferPhotosToPathWithStoreService>();
+            // configure services by transient
             builder.Services.AddTransient<ISMSService, SMSService>();
 
             // configure JWT
