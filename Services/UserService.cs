@@ -1,7 +1,7 @@
 ﻿using chattingApp.DataAndContext;
 using chattingApp.vModels;
 using Microsoft.EntityFrameworkCore;
-using NuGet.Protocol.Plugins;
+using Twilio.Rest.Serverless.V1.Service.Asset;
 
 namespace chattingApp.Services
 {
@@ -9,11 +9,15 @@ namespace chattingApp.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly IAuthService _authService;
+        private readonly ITransferPhotosToPathWithStoreService _photoService;
 
-        public UserService(ApplicationDbContext context, IAuthService authService)
+        public UserService(ApplicationDbContext context, 
+                            IAuthService authService, 
+                            ITransferPhotosToPathWithStoreService photoService)
         {
             _context = context;
             _authService = authService;
+            _photoService = photoService;
         }
 
         // for the main page [get contacts for user ordered by last massages(you will know the contacts for the user by messages between sender and reciever)]
@@ -24,7 +28,7 @@ namespace chattingApp.Services
             // Fetch groups with the last message data
             var groupsWithLastMessages = await _context.GroupMembers
                 .AsNoTracking()
-                .Where(gm => gm.UserId == userId)
+                .Where(gm => gm.UserId == userId && )
                 .Include(gm => gm.Group)
                 .Select(gm => new
                 {
@@ -75,6 +79,7 @@ namespace chattingApp.Services
                     {
                         contactId = user.Id,
                         contactName = user.UserName,
+                        contactPhoneNumber = user.PhoneNumber,
                         imgUrlForContact = user.imgURL,
                         isGroup = false,
                         senderName = msg.LastMessage.SenderId == userId ? "You" : user.UserName,
@@ -91,92 +96,108 @@ namespace chattingApp.Services
                 .ToList();
 
             return allContacts;
-
-
-            //var groupsWithLastMessagesThatUserIn = await _context.GroupMembers
-            //    .AsNoTracking() // Avoids tracking since it's a read-only operation
-            //    .Where(gm => gm.UserId == userId)
-            //    .Include(gm => gm.Group) // Load related group data
-            //    .Select(gm => new
-            //    {
-            //        GroupId = gm.Group.Id,
-            //        GroupName = gm.Group.GroupName,
-            //        ImgUrl = gm.Group.imgUrl,
-            //        LastMessageData = _context.Messages
-            //            .Where(m => m.GroupId == gm.Group.Id)
-            //            .OrderByDescending(m => m.TimeOfSend)
-            //            .Join(_context.Users, // Joining Users to fetch SenderName directly
-            //                m => m.SenderId,
-            //                u => u.Id,
-            //                (m, u) => new
-            //                {
-            //                    TimeOfSend = m.TimeOfSend,
-            //                    MessageText = m.MessageText,
-            //                    IsDeleted = m.IsDeleted,
-            //                    MessageStatus = m.MessageStatus,
-            //                    SenderName = u.UserName ?? "Unknown" // Handle null sender names gracefully
-            //                })
-            //            .FirstOrDefault() // Fetch only the most recent message
-            //    })
-            //    .OrderByDescending(g => g.LastMessageData != null ? g.LastMessageData.TimeOfSend : DateTime.MinValue) // Order by last message time, handling potential nulls
-            //    .ToListAsync();
-
-
-
-
-            //var user = new ContactWithMessage();
-
-            //var contactsWithLastMessage = await _context.Messages
-            //    .AsNoTracking() // Avoids tracking changes since this is a read-only query
-            //    .Where(x => (x.SenderId == userId || x.RecieverId == userId) && x.GroupId == null) // Filter messages between the user and other contacts
-            //    .GroupBy(x => x.SenderId == userId ? x.RecieverId : x.SenderId) // Group by the other user’s ID
-            //    .Select(g => new
-            //    {
-            //        ContactId = g.Key,
-            //        LastMessage = g.OrderByDescending(m => m.TimeOfSend).FirstOrDefault() // Fetch the last message directly
-            //    })
-            //    .Join(_context.Users.AsNoTracking(), // Join with the Users table to fetch user details
-            //        msg => msg.ContactId,
-            //        user => user.Id,
-            //        (msg, user) => new
-            //        {
-            //            ContactId = user.Id,
-            //            ContactName = user.UserName,
-            //            ImgUrl = user.imgURL,
-            //            LastMessageData = new
-            //            {
-            //                TimeOfSend = msg.LastMessage.TimeOfSend,
-            //                MessageText = msg.LastMessage.MessageText,
-            //                IsDeleted = msg.LastMessage.IsDeleted,
-            //                MessageStatus = msg.LastMessage.MessageStatus,
-            //            }
-            //        })
-            //    .OrderByDescending(g => g.LastMessageData.TimeOfSend) // Order the contacts by the last message time
-            //    .ToListAsync();
-
-
-
-            //throw new NotImplementedException();
         }
 
-        public Task<userDataInDetails> getUserDataAsync(string id)
+        public async Task<userDataInDetails> getUserDataAsync(string id)
         {
-            throw new NotImplementedException();
+            if (string.IsNullOrEmpty(id))
+                return new userDataInDetails { message = "error, user id required!" };
+
+            var result = await _context.Users
+                .Where(u => u.Id == id)
+                .Select(u => new userDataInDetails
+                {
+                    id = u.Id,
+                    imgUrl = u.imgURL,
+                    lastOnlineTime = u.lastOnlineTime,
+                    name = u.UserName,
+                    phoneNumber = u.PhoneNumber,
+                    message = ""
+                })
+                .FirstOrDefaultAsync();
+
+            if (result == null)
+                return new userDataInDetails { message = "user not found" };
+
+            return result;
+                
         }
         // when user makes search on contact by phone or name 
-        public Task<List<ContactWithMessage>> getUsersByNameOrPhoneAsync(string searchText)
+        public async Task<List<ContactWithMessage>> getUsersByNameOrPhoneAsync(string searchText)
         {
-            throw new NotImplementedException();
+            // Fetch all contacts for the user
+            var result = await getContactsForUserAsync();
+
+            // Return all contacts if the search text is empty
+            if (string.IsNullOrEmpty(searchText))
+                return result;
+
+            // Check if the search text is a phone number (11 digits or less, all numeric)
+            if (searchText.Length <= 11 && searchText.All(char.IsDigit))
+            {
+                // Filter by phone number
+                result = result.Where(x => !string.IsNullOrEmpty(x.contactPhoneNumber) && x.contactPhoneNumber.Contains(searchText)).ToList();
+            }
+            else
+            {
+                // Filter by contact name
+                result = result.Where(x => !string.IsNullOrEmpty(x.contactName) && x.contactName.Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            return result;
         }
 
-        public Task<bool> deleteChat(string deleteContactId)
+
+        public async Task<deleteChatResult> deleteChat(string deleteContactId)
         {
-            throw new NotImplementedException();
+            var currentUserId = _authService.getUserId();
+
+            var contact = await _context.Users.FirstOrDefaultAsync(x => x.Id == deleteContactId);
+            if (contact == null) 
+                return new deleteChatResult { message = "there is no contacts with this id",isDeletedSuccessfully = false };
+            
+            var messagesShouldDelete = await _context.Messages
+                .Where(
+                        m => m.GroupId == null &&
+                        ((m.SenderId == currentUserId && m.RecieverId == deleteContactId) || 
+                        (m.RecieverId == currentUserId && m.SenderId == deleteContactId))
+                )
+                .ToListAsync();
+
+            if (messagesShouldDelete.Any() )
+            {
+                _context.Messages.RemoveRange(messagesShouldDelete);
+                await _context.SaveChangesAsync();
+                new deleteChatResult { isDeletedSuccessfully = true, message = "" };
+            }
+
+            return new deleteChatResult { isDeletedSuccessfully = true, message = ""};
         }
 
-        public Task<userDataModel> updateUserDataAsync(userUpdateDataModel model)
+        public async Task<string> updateUserDataAsync(userUpdateDataModel model)
         {
-            throw new NotImplementedException();
+            var currentUserId = _authService.getUserId();
+
+            if(await _context.Users.FirstOrDefaultAsync(x => x.UserName == model.name) != null)
+                return "this new user name used for another user!";
+
+            // store the new img 
+            var newImgPath = _photoService.GetPhotoPath(model.img);
+            if (string.IsNullOrEmpty(newImgPath) || newImgPath.StartsWith("error, "))
+                return "issue while storing image: " + newImgPath;
+
+
+            // get this user 
+            var modifiedUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == currentUserId);
+            var oldImgPath = modifiedUser.imgURL;
+            // update the user data
+            modifiedUser.imgURL = newImgPath;
+            modifiedUser.UserName = model.name;
+            var changes = await _context.SaveChangesAsync();
+            if (changes > 0)
+                _photoService.DeleteFile(oldImgPath);
+
+            return "";
         }
     }
 }

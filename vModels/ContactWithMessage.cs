@@ -5,6 +5,7 @@
         // contact data
         public string contactId { get; set; }
         public string contactName { get; set; }
+        public string contactPhoneNumber { get; set; }
         public string imgUrlForContact { get; set; }
 
         // last message data

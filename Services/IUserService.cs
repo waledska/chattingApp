@@ -5,11 +5,11 @@ namespace chattingApp.Services
     public interface IUserService
     {
         // update last online time
-        Task<userDataModel> updateUserDataAsync(userUpdateDataModel model);
+        Task<string> updateUserDataAsync(userUpdateDataModel model);//
         Task<userDataInDetails> getUserDataAsync(string id);
         Task<List<ContactWithMessage>> getUsersByNameOrPhoneAsync(string searchText);
-        Task<List<ContactWithMessage>> getContactsForUserAsync();
-        Task<bool> deleteChat(string deleteContactId);
+        Task<List<ContactWithMessage>> getContactsForUserAsync(); //
+        Task<deleteChatResult> deleteChatAsync(string deleteContactId);//
     }
 }
 

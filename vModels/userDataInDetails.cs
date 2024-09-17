@@ -8,5 +8,6 @@ namespace chattingApp.vModels
         public string phoneNumber { get; set; }
         public string imgUrl { get; set; }
         public DateTime lastOnlineTime { get; set; }
+        public string message { get; set; }
     }
 }

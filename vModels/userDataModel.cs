@@ -14,5 +14,7 @@ namespace chattingApp.vModels
         [Required]
         [DataType(DataType.Upload)]
         public IFormFile img { get; set; }
+
+        public string message { get; set; }
     }
 }
