@@ -3,6 +3,7 @@ using chattingApp.vModels;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
 
 namespace chattingApp.Controllers
 {
@@ -11,16 +12,13 @@ namespace chattingApp.Controllers
     [Authorize(AuthenticationSchemes = "Bearer")]
     public class UserController : ControllerBase
     {
-        private readonly IAuthService _authService;
         private readonly IUserService _userService;
 
         public UserController(IAuthService authService, IUserService userService)
         {
-            _authService = authService;
             _userService = userService;
         }
 
-        // get userId
         [HttpGet("getContacts")]
         public async Task<IActionResult> getContacts()
         {
@@ -52,7 +50,7 @@ namespace chattingApp.Controllers
             return BadRequest(result.message);
         }
         [HttpPut("UpdateUserData")]
-        public async Task<IActionResult> UpdateUserData(userUpdateDataModel model)
+        public async Task<IActionResult> UpdateUserData([FromForm] userUpdateDataModel model)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
@@ -62,6 +60,22 @@ namespace chattingApp.Controllers
 
             if (result != "")
                 return BadRequest(result);
+
+            return Ok("user data updated successfully");
+        }
+        [HttpGet("getUserData")]
+        public async Task<IActionResult> getUserData(string userId)
+        {
+            var result = await _userService.getUserDataAsync(userId);
+            if (result.message != "")
+                return BadRequest(result.message);
+
+            return Ok(result);
+        }
+        [HttpGet("getUsersByNameOrPhone")]
+        public async Task<IActionResult> getUsersByNameOrPhone(string searchText)
+        {
+            var result = await _userService.getUsersByNameOrPhoneAsync(searchText);
 
             return Ok(result);
         }

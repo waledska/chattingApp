@@ -28,7 +28,7 @@ namespace chattingApp.Services
             // Fetch groups with the last message data
             var groupsWithLastMessages = await _context.GroupMembers
                 .AsNoTracking()
-                .Where(gm => gm.UserId == userId && )
+                .Where(gm => gm.UserId == userId)
                 .Include(gm => gm.Group)
                 .Select(gm => new
                 {
@@ -37,7 +37,7 @@ namespace chattingApp.Services
                     ImgUrl = gm.Group.imgUrl,
                     IsGroup = true,
                     LastMessage = _context.Messages
-                        .Where(m => m.GroupId == gm.Group.Id)
+                        .Where(m => m.GroupId == gm.Group.Id && m.TimeOfSend > gm.UserJoinedAt && (m.TimeOfSend < gm.UserRemovedAt || gm.UserRemovedAt == null))
                         .OrderByDescending(m => m.TimeOfSend)
                         .FirstOrDefault(),
                 })
@@ -56,14 +56,14 @@ namespace chattingApp.Services
                         .Select(u => u.UserName)
                         .FirstOrDefault()
                     : null,
-                messageText = g.LastMessage != null ? g.LastMessage.MessageText : string.Empty,
+                messageText = g.LastMessage != null && g.LastMessage.IsDeleted.HasValue && !g.LastMessage.IsDeleted.Value ? g.LastMessage.MessageText : string.Empty,
                 timeOfMessage = g.LastMessage != null ? g.LastMessage.TimeOfSend : DateTime.MinValue,
                 statusOfMessage = g.LastMessage != null ? g.LastMessage.MessageStatus : string.Empty,
                 isMessageDeleted = g.LastMessage != null && g.LastMessage.IsDeleted.HasValue && g.LastMessage.IsDeleted.Value
             }).ToList();
 
-            // Fetch individual contacts with the last message data
-            var contactsWithLastMessages = await _context.Messages
+            // Fetch individual contacts with the last message data // there is error here 
+            var contactsWithLastMessages = _context.Messages
                 .AsNoTracking()
                 .Where(x => (x.SenderId == userId || x.RecieverId == userId) && x.GroupId == null)
                 .GroupBy(x => x.SenderId == userId ? x.RecieverId : x.SenderId)
@@ -72,6 +72,7 @@ namespace chattingApp.Services
                     ContactId = g.Key,
                     LastMessage = g.OrderByDescending(m => m.TimeOfSend).FirstOrDefault()
                 })
+                .AsEnumerable()
                 .Join(_context.Users.AsNoTracking(),
                     msg => msg.ContactId,
                     user => user.Id,
@@ -88,7 +89,7 @@ namespace chattingApp.Services
                         statusOfMessage = msg.LastMessage != null ? msg.LastMessage.MessageStatus : string.Empty,
                         isMessageDeleted = msg.LastMessage != null && msg.LastMessage.IsDeleted.HasValue && msg.LastMessage.IsDeleted.Value
                     })
-                .ToListAsync();
+                .ToList();
 
             // Merge both lists together
             var allContacts = groupContacts.Concat(contactsWithLastMessages)
@@ -148,7 +149,7 @@ namespace chattingApp.Services
         }
 
 
-        public async Task<deleteChatResult> deleteChat(string deleteContactId)
+        public async Task<deleteChatResult> deleteChatAsync(string deleteContactId)
         {
             var currentUserId = _authService.getUserId();
 
@@ -193,6 +194,7 @@ namespace chattingApp.Services
             // update the user data
             modifiedUser.imgURL = newImgPath;
             modifiedUser.UserName = model.name;
+            modifiedUser.NormalizedUserName = model.name.ToUpper();
             var changes = await _context.SaveChangesAsync();
             if (changes > 0)
                 _photoService.DeleteFile(oldImgPath);

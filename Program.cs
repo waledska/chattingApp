@@ -39,6 +39,7 @@ namespace chattingApp
             // configure services by scoped
             builder.Services.AddScoped<IAuthService, AuthService>();
             builder.Services.AddScoped<IUserService, UserService>();
+            builder.Services.AddScoped<IGroupService, GroupService>();
             builder.Services.AddScoped<ITransferPhotosToPathWithStoreService, TransferPhotosToPathWithStoreService>();
             // configure services by transient
             builder.Services.AddTransient<ISMSService, SMSService>();

@@ -45,7 +45,7 @@ namespace chattingApp.Services
                 {
                     if (image.Width != image.Height)
                     {
-                        return "Image is not square in dimensions";
+                        return "error, Image is not square in dimensions";
                     }
                 }
             }
